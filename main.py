@@ -1,11 +1,29 @@
-from freya_llm import ask_groq
+from agent import FreyaAgentNL
 
-history = []
-while True:
-    user = input("You: ")
-    if user.lower() in ["exit","quit"]:
-        break
-    reply = ask_groq(user, history)
-    print("FREYA:", reply)
-    history.append({"role":"user", "content": user})
-    history.append({"role":"assistant", "content": reply})
+def main():
+    """Lance la boucle interactive avec FREYA."""
+    try:
+        freya = FreyaAgentNL()
+        print("Bienvenue dans FREYA (NL), ton assistant personnel.")
+        print("Tape 'exit' pour quitter.\n")
+        
+        while True:
+            try:
+                message = input("Vous: ").strip()
+                if not message:
+                    continue
+                if message.lower() in ["exit", "quit"]:
+                    print("FREYA: À bientôt !")
+                    break
+                response = freya.respond(message)
+                print(f"FREYA: {response}\n")
+            except KeyboardInterrupt:
+                print("\nFREYA: Interruption détectée. À bientôt !")
+                break
+    except Exception as e:
+        print(f"Erreur critique: {e}")
+        return 1
+    return 0
+
+if __name__ == "__main__":
+    exit(main())
