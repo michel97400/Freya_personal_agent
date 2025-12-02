@@ -9,7 +9,21 @@ api_key = os.getenv("GROQ_API_KEY")
 if not api_key:
     raise ValueError("GROQ_API_KEY non définie dans les variables d'environnement")
 
-client = Groq(api_key=api_key)
+try:
+    # Initialiser le client Groq avec gestion des erreurs
+    client = Groq(api_key=api_key)
+except TypeError as e:
+    # Problème de compatibilité entre groq et httpx
+    if "proxies" in str(e):
+        # Essayer sans les paramètres problématiques
+        import warnings
+        warnings.warn(f"Avertissement: Problème de compatibilité détecté. Tentative d'initialisation alternative.")
+        # Réinstaller les bonnes versions de dépendances
+        print("❌ Erreur de compatibilité détectée.")
+        print("Veuillez exécuter: pip install --upgrade groq httpx")
+        raise
+    else:
+        raise
 
 def ask_groq(prompt, history=None):
     """Envoie une requête au modèle Groq avec historique optionnel."""
