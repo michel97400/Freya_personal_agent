@@ -316,6 +316,99 @@ def git_workflow(commit_message="Automated commit"):
     except subprocess.CalledProcessError as e:
         return f"❌ git push a échoué: {e.stderr.strip()}"
 
+
+def git_create_branch(branch_name):
+    """
+    Crée une nouvelle branche et la switch.
+    
+    Paramètres:
+    - branch_name: Nom de la nouvelle branche
+    
+    Retourne le résultat ou un message d'erreur.
+    """
+    import subprocess
+    
+    # Vérifier qu'on est dans un dépôt Git
+    try:
+        subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        return "❌ Ce répertoire n'est pas un dépôt Git."
+    except FileNotFoundError:
+        return "❌ Git n'est pas installé ou introuvable."
+
+    # Créer et checkout la branche
+    try:
+        subprocess.run(["git", "checkout", "-b", branch_name], capture_output=True, text=True, check=True)
+        return f"✅ Branche '{branch_name}' créée et activée."
+    except subprocess.CalledProcessError as e:
+        if "already exists" in e.stderr.lower():
+            return f"⚠️ La branche '{branch_name}' existe déjà."
+        return f"❌ Erreur: {e.stderr.strip()}"
+
+
+def git_checkout_branch(branch_name):
+    """
+    Switch vers une branche existante.
+    
+    Paramètres:
+    - branch_name: Nom de la branche vers laquelle switcher
+    
+    Retourne le résultat ou un message d'erreur.
+    """
+    import subprocess
+    
+    # Vérifier qu'on est dans un dépôt Git
+    try:
+        subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        return "❌ Ce répertoire n'est pas un dépôt Git."
+    except FileNotFoundError:
+        return "❌ Git n'est pas installé ou introuvable."
+
+    # Vérifier qu'il n'y a pas de changements non commitées
+    try:
+        result = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, check=True)
+        if result.stdout.strip():
+            return "⚠️ Vous avez des changements non commitées. Faites un commit ou un stash avant de changer de branche."
+    except subprocess.CalledProcessError:
+        pass
+
+    # Checkout la branche
+    try:
+        subprocess.run(["git", "checkout", branch_name], capture_output=True, text=True, check=True)
+        return f"✅ Switched vers la branche '{branch_name}'."
+    except subprocess.CalledProcessError as e:
+        if "did not match any" in e.stderr.lower():
+            return f"❌ La branche '{branch_name}' n'existe pas."
+        return f"❌ Erreur: {e.stderr.strip()}"
+
+
+def git_list_branches():
+    """
+    Liste toutes les branches du dépôt.
+    
+    Retourne la liste des branches ou un message d'erreur.
+    """
+    import subprocess
+    
+    # Vérifier qu'on est dans un dépôt Git
+    try:
+        subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        return "❌ Ce répertoire n'est pas un dépôt Git."
+    except FileNotFoundError:
+        return "❌ Git n'est pas installé ou introuvable."
+
+    # Lister les branches
+    try:
+        result = subprocess.run(["git", "branch", "-a"], capture_output=True, text=True, check=True)
+        branches = result.stdout.strip()
+        if not branches:
+            return "ℹ️ Aucune branche trouvée."
+        return f"📋 Branches disponibles:\n{branches}"
+    except subprocess.CalledProcessError as e:
+        return f"❌ Erreur: {e.stderr.strip()}"
+
 def get_pc_config():
     """
     Retourne un dictionnaire avec les infos de configuration du PC.
@@ -349,3 +442,35 @@ def get_pc_config():
         info["warning"] = "psutil non installé - infos limitées"
 
     return info
+
+
+def install_python_package(package_name):
+    """
+    Installe un paquet Python via pip.
+    
+    Paramètres:
+    - package_name: Nom du paquet à installer (ex: 'requests', 'numpy==1.21.0')
+    
+    Retourne le résultat ou un message d'erreur.
+    """
+    import sys
+    import subprocess
+    
+    if not package_name or not package_name.strip():
+        return "❌ Erreur: le nom du paquet ne peut pas être vide."
+    
+    package_name = package_name.strip()
+    
+    try:
+        # Utiliser le même Python que celui qui exécute le code
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", package_name],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return f"✅ Le paquet '{package_name}' a été installé avec succès.\n{result.stdout.strip()}"
+    except subprocess.CalledProcessError as e:
+        return f"❌ Erreur lors de l'installation de '{package_name}':\n{e.stderr.strip()}"
+    except Exception as e:
+        return f"❌ Erreur inattendue: {e}"

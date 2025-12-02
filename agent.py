@@ -1,6 +1,6 @@
 # agent.py
 import json
-from tools import list_files, read_file, write_file, delete_path, search_files, create_folder, open_browser, modify_file, git_push, git_workflow, get_pc_config
+from tools import list_files, read_file, write_file, delete_path, search_files, create_folder, open_browser, modify_file, git_push, git_workflow, git_create_branch, git_checkout_branch, git_list_branches, get_pc_config, install_python_package
 from freya_llm import client  # ton client Groq déjà configuré
 import os
 
@@ -165,6 +165,60 @@ TOOL_DEFS = [
                 "required": []
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_create_branch",
+            "description": "Crée une nouvelle branche Git et la bascule",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "branch_name": {"type": "string", "description": "Nom de la nouvelle branche"}
+                },
+                "required": ["branch_name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_checkout_branch",
+            "description": "Bascule vers une branche Git existante",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "branch_name": {"type": "string", "description": "Nom de la branche"}
+                },
+                "required": ["branch_name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git_list_branches",
+            "description": "Liste toutes les branches disponibles du dépôt",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "install_python_package",
+            "description": "Installe un paquet Python via pip",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "package_name": {"type": "string", "description": "Nom du paquet à installer (ex: 'requests', 'numpy==1.21.0')"}
+                },
+                "required": ["package_name"]
+            }
+        }
     }
 
 ]
@@ -207,6 +261,17 @@ def call_tool(tool_name, arguments):
     elif tool_name == "get_pc_config":
         config = get_pc_config()
         return str(config)
+    elif tool_name == "git_create_branch":
+        branch_name = arguments["branch_name"]
+        return git_create_branch(branch_name)
+    elif tool_name == "git_checkout_branch":
+        branch_name = arguments["branch_name"]
+        return git_checkout_branch(branch_name)
+    elif tool_name == "git_list_branches":
+        return git_list_branches()
+    elif tool_name == "install_python_package":
+        package_name = arguments["package_name"]
+        return install_python_package(package_name)
     return "Outil inconnu"
 
 
@@ -254,7 +319,7 @@ Sois TRÈS PRÉCIS et EXHAUSTIF. Énumère CHAQUE action."""
         self._cleanup_memory()
         
         # Déterminer le tool_choice en fonction de la demande
-        keywords_require_tools = ["modifi", "rajoute", "ajoute", "change", "remplace", "crée", "écris", "insère", "supprima", "dele"]
+        keywords_require_tools = ["modifi", "rajoute", "ajoute", "change", "remplace", "crée", "écris", "insère", "supprima", "dele", "instal", "pip"]
         requires_tool = any(keyword in message.lower() for keyword in keywords_require_tools)
         
         # Créer un plan si c'est une demande complexe (DÉSACTIVÉ pour économiser tokens)
