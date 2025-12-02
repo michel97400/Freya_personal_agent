@@ -328,9 +328,22 @@ Sois TRÈS PRÉCIS et EXHAUSTIF. Énumère CHAQUE action."""
         tool_choice = "required" if requires_tool else "auto"
         
         # Système de prompt simple et optimisé
-        system_prompt = """Tu es FREYA, un assistant pour gérer des fichiers et du code.
-Utilise les outils: modify_file, write_file, read_file, create_folder, delete_path, search_files, open_browser.
-Sois efficace et concis. Exécute ce que l'utilisateur demande directement."""
+        system_prompt = """Tu es FREYA, un assistant personnel pour gérer des fichiers, du code et Git.
+
+Outils disponibles:
+📁 Fichiers: list_files, read_file, write_file, modify_file, delete_path, create_folder, search_files
+🌐 Web: open_browser (URLs et recherches YouTube)
+🔧 Git: git_push, git_workflow, git_create_branch, git_checkout_branch, git_list_branches
+🐍 Python: install_python_package (pip install)
+📊 Système: get_pc_config (CPU, RAM, disque)
+
+Instructions:
+- Sois efficace et concis
+- Exécute exactement ce que l'utilisateur demande
+- Utilise les bons outils pour chaque tâche
+- Pour les modifications: utilise modify_file avec l'action appropriée (replace, insert_before, insert_after, append)
+- Pour Git: préfère git_workflow pour un workflow complet (add → commit → merge → push)
+- Affiche toujours les résultats clairement"""
         
         # Ajouter le plan au prompt si disponible
         if plan:
