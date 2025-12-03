@@ -2,6 +2,10 @@
 
 FREYA est un assistant IA personnel qui gère vos fichiers, modifie votre code et exécute des tâches système via des commandes en langage naturel.
 
+**Outils disponibles:** 20 outils intégrés (fichiers, Git, web, système, impression, recherche)
+**API:** Groq (gpt-oss-120b)
+**Optimisé pour:** Clé API gratuite (8000 TPM)
+
 ## 📋 Table des matières
 
 - [Installation](#installation)
@@ -9,8 +13,10 @@ FREYA est un assistant IA personnel qui gère vos fichiers, modifie votre code e
 - [Utilisation](#utilisation)
 - [Commandes disponibles](#commandes-disponibles)
   - [Gestion de fichiers](#gestion-de-fichiers)
+  - [Web](#web)
   - [Opérations Git](#opérations-git)
-  - [Autres commandes](#autres-commandes)
+  - [Système](#système)
+  - [Impression](#impression)
 - [Architecture](#architecture)
 - [Optimisation des tokens](#optimisation-des-tokens)
 
@@ -23,6 +29,8 @@ FREYA est un assistant IA personnel qui gère vos fichiers, modifie votre code e
 - Python 3.8+
 - Git (pour les fonctionnalités Git)
 - Un compte Groq avec une clé API
+- **Windows:** pywin32 sera installé automatiquement (pour l'impression)
+- **Web scraping:** trafilatura, requests et beautifulsoup4 seront installés automatiquement
 
 ### Étapes d'installation
 
@@ -218,6 +226,56 @@ Ouvre une URL dans le navigateur par défaut ou lance une recherche YouTube
 
 ---
 
+#### `search_web`
+Recherche sur le web via DuckDuckGo et retourne les résultats avec URLs et descriptions
+
+**Paramètres:**
+- `query` - Terme de recherche (obligatoire)
+- `num_results` - Nombre de résultats (1-10, défaut 5)
+
+**Exemples:**
+- "Recherche 'Python web framework'"
+- "Cherche 'best practices Node.js'"
+- "Trouve les 3 meilleurs résultats pour 'machine learning'"
+
+**Fonctionnalités:**
+- ✅ Utilise DuckDuckGo (plus permissif que Google, pas de blocage)
+- ✅ Retourne titre, URL, et description pour chaque résultat
+- ✅ Pas de clé API requise
+
+---
+
+#### `fetch_webpage`
+Récupère et extrait le contenu textuel d'une page web (utilise Trafilatura)
+
+**Paramètres:**
+- `url` - URL de la page (ex: https://example.com ou example.com)
+
+**Exemples:**
+- "Récupère le contenu de github.com"
+- "Extrait le texte de https://example.com/article"
+- "Lis la page news.ycombinator.com"
+
+**Fonctionnalités:**
+- ✅ Extrait uniquement le contenu textuel pertinent
+- ✅ Ignore publicités, scripts, CSS
+- ✅ Limite à 2000 caractères pour économiser les tokens
+
+---
+
+#### `search_and_summarize`
+Recherche sur le web et extrait automatiquement le contenu de la première page trouvée
+
+**Paramètres:**
+- `query` - Terme de recherche
+
+**Exemples:**
+- "Trouve une explication sur la cryptographie"
+- "Cherche un tutoriel Python et résume-le"
+- "Trouve les dernières nouvelles sur l'IA"
+
+---
+
 ### 🔧 Opérations Git
 
 #### `git_push`
@@ -303,6 +361,49 @@ Retourne les informations de configuration du PC
 - "Quels sont les specs de mon PC?"
 - "Affiche la configuration du système"
 - "Combien de RAM j'ai?"
+
+---
+
+#### `launch_application`
+Lance une application executable
+
+**Exemples:**
+- "Lance Notepad"
+- "Ouvre notepad.exe"
+- "Exécute C:\\Program Files\\app.exe"
+
+---
+
+#### `install_python_package`
+Installe un package Python via pip
+
+**Exemples:**
+- "Installe requests"
+- "Pip install numpy"
+- "Installe pandas via pip"
+
+---
+
+### 🖨️ Impression
+
+#### `print_file`
+Imprime un fichier sur une imprimante réseau ou locale
+
+**Paramètres:**
+- `file_path` - Chemin du fichier (relatif ou absolu)
+- `printer_name` - Nom de l'imprimante (optionnel, utilise l'imprimante par défaut)
+
+**Exemples:**
+- "Imprime requirements.txt"
+- "Imprime le fichier agent.py"
+- "Envoie main.py à l'imprimante"
+- "Imprime C:\\Users\\Apprenant\\Desktop\\rapport.pdf sur HP_OfficeJet"
+
+**Fonctionnalités:**
+- ✅ Accepte les chemins relatifs et absolus
+- ✅ Support des imprimantes réseau (HP OfficeJet, etc.)
+- ✅ Gère les erreurs gracieusement
+- ✅ Supporte Windows, Linux et macOS
 
 ---
 

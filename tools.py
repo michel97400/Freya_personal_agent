@@ -2,16 +2,50 @@ import os
 import shutil
 import webbrowser
 import subprocess
+import requests
+import trafilatura
+from urllib.parse import urljoin
 
 def list_files(path="."):
-    """Liste tous les fichiers d'un dossier (exclut les dossiers)."""
+    """Liste tous les fichiers et dossiers d'un répertoire."""
     try:
         path = os.path.abspath(path)
-        return [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+        items = os.listdir(path)
+        
+        if not items:
+            return f"📁 Le répertoire '{path}' est vide."
+        
+        # Séparer fichiers et dossiers
+        files = []
+        folders = []
+        
+        for item in items:
+            full_path = os.path.join(path, item)
+            if os.path.isdir(full_path):
+                folders.append(item)
+            else:
+                files.append(item)
+        
+        result = f"📁 Contenu de '{path}':\n\n"
+        
+        if folders:
+            result += "📂 Dossiers:\n"
+            for folder in sorted(folders):
+                result += f"  - {folder}/\n"
+            result += "\n"
+        
+        if files:
+            result += "📄 Fichiers:\n"
+            for file in sorted(files):
+                result += f"  - {file}\n"
+        
+        return result
     except FileNotFoundError:
-        return f"Erreur: le chemin '{path}' n'existe pas."
+        return f"❌ Erreur: le chemin '{path}' n'existe pas."
     except PermissionError:
-        return f"Erreur: accès refusé à '{path}'."
+        return f"❌ Erreur: accès refusé à '{path}'."
+    except Exception as e:
+        return f"❌ Erreur lors de la lecture du répertoire: {e}"
 
 def read_file(path):
     """Lit et retourne le contenu d'un fichier."""
@@ -474,3 +508,284 @@ def install_python_package(package_name):
         return f"❌ Erreur lors de l'installation de '{package_name}':\n{e.stderr.strip()}"
     except Exception as e:
         return f"❌ Erreur inattendue: {e}"
+
+
+def git_clone(repo_url, target_path=None):
+    """
+    Clone un dépôt Git à partir d'une URL.
+    
+    Paramètres:
+    - repo_url: URL du dépôt Git (ex: https://github.com/user/repo.git)
+    - target_path: Chemin où cloner (optionnel, par défaut le Bureau/Desktop)
+    
+    Retourne le résultat ou un message d'erreur.
+    """
+    import subprocess
+    
+    if not repo_url or not repo_url.strip():
+        return "❌ Erreur: l'URL du dépôt ne peut pas être vide."
+    
+    repo_url = repo_url.strip()
+    
+    # Vérifier que c'est une URL Git valide
+    if not ("git" in repo_url.lower() or "github" in repo_url.lower() or repo_url.endswith(".git")):
+        if not repo_url.startswith(("http://", "https://", "git@")):
+            return "❌ Erreur: URL du dépôt invalide. Utilisez une URL HTTPS ou SSH."
+    
+    try:
+        # Déterminer le chemin par défaut (Bureau/Desktop)
+        if not target_path:
+            # Récupérer le chemin du bureau
+            import platform
+            if platform.system() == "Windows":
+                desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+            else:
+                desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+            
+            # Extraire le nom du repo de l'URL
+            repo_name = repo_url.rstrip("/").split("/")[-1]
+            if repo_name.endswith(".git"):
+                repo_name = repo_name[:-4]
+            
+            target_path = os.path.join(desktop_path, repo_name)
+        else:
+            target_path = os.path.abspath(target_path)
+        
+        # Construire la commande git clone
+        clone_cmd = ["git", "clone", repo_url, target_path]
+        
+        # Exécuter git clone
+        result = subprocess.run(
+            clone_cmd,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        return f"✅ Dépôt cloné avec succès!\n📍 Chemin: {target_path}\n🔗 URL: {repo_url}"
+    
+    except subprocess.CalledProcessError as e:
+        return f"❌ Erreur lors du clone:\n{e.stderr.strip()}"
+    except FileNotFoundError:
+        return "❌ Git n'est pas installé ou introuvable."
+    except Exception as e:
+        return f"❌ Erreur inattendue: {e}"
+
+
+def launch_application(app_path, arguments=None):
+    """
+    Lance une application (exe, script, etc.).
+    
+    Paramètres:
+    - app_path: Chemin complet de l'application (ex: C:\\Program Files\\app.exe, notepad.exe)
+    - arguments: Arguments à passer à l'application (optionnel, ex: 'file.txt')
+    
+    Retourne un message de succès ou d'erreur.
+    """
+    import subprocess
+    import platform
+    
+    if not app_path or not app_path.strip():
+        return "❌ Erreur: le chemin de l'application ne peut pas être vide."
+    
+    app_path = app_path.strip()
+    
+    try:
+        # Construire la commande
+        if arguments:
+            # Si des arguments sont fournis, créer une liste
+            if isinstance(arguments, str):
+                cmd = [app_path, arguments]
+            else:
+                cmd = [app_path] + arguments
+        else:
+            cmd = [app_path]
+        
+        # Lancer l'application
+        # Utiliser Popen pour ne pas attendre la fin de l'application
+        if platform.system() == "Windows":
+            # Sur Windows, utiliser CREATE_NO_WINDOW pour éviter une console
+            import subprocess
+            subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+            )
+        else:
+            # Sur Linux/macOS
+            subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL
+            )
+        
+        app_name = os.path.basename(app_path)
+        return f"✅ L'application '{app_name}' a été lancée avec succès!\n📍 Chemin: {app_path}"
+    
+    except FileNotFoundError:
+        return f"❌ Erreur: l'application '{app_path}' n'a pas été trouvée."
+    except PermissionError:
+        return f"❌ Erreur: permission refusée pour lancer '{app_path}'."
+    except Exception as e:
+        return f"❌ Erreur lors du lancement de l'application: {e}"
+
+def print_file(file_path, printer_name=None):
+    """Imprime un fichier sur une imprimante réseau ou locale."""
+    try:
+        # Gérer les chemins relatifs
+        if not os.path.isabs(file_path):
+            file_path = os.path.abspath(file_path)
+        
+        # Vérifier que le fichier existe
+        if not os.path.exists(file_path):
+            return f"❌ Erreur: le fichier '{file_path}' n'existe pas."
+        
+        file_name = os.path.basename(file_path)
+        
+        # Sur Windows, utiliser ShellExecute (le plus simple)
+        import platform
+        if platform.system() == "Windows":
+            try:
+                import win32api
+                
+                # ShellExecute avec "print" lance directement l'imprimante par défaut
+                win32api.ShellExecute(0, "print", file_path, None, ".", 0)
+                
+                return f"✅ '{file_name}' envoyé à l'imprimante!"
+            
+            except ImportError:
+                # Fallback sans win32api: utiliser Notepad pour imprimer
+                try:
+                    subprocess.run(
+                        ["notepad.exe", "/p", file_path],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=5
+                    )
+                    return f"✅ '{file_name}' envoyé à l'imprimante!"
+                except Exception as e:
+                    return f"❌ Erreur impression: {e}"
+            except Exception as e:
+                return f"❌ Erreur: {e}"
+        
+        else:
+            # Sur Linux/macOS, utiliser lpr
+            try:
+                subprocess.run(
+                    ["lpr", file_path],
+                    check=True,
+                    capture_output=True,
+                    timeout=5
+                )
+                return f"✅ '{file_name}' envoyé à l'imprimante!"
+            except Exception as e:
+                return f"❌ Erreur: {e}"
+    
+    except Exception as e:
+        return f"❌ Erreur impression: {e}"
+
+def search_web(query, num_results=5):
+    """Recherche sur le web avec DuckDuckGo et retourne les résultats avec URLs."""
+    try:
+        try:
+            from ddgs import DDGS
+        except ImportError:
+            return f"❌ Module ddgs non installé. Installe-le avec: pip install ddgs"
+        
+        # Utiliser DuckDuckGo qui est plus permissif que Google
+        ddgs = DDGS()
+        
+        # Effectuer la recherche
+        results = list(ddgs.text(query, max_results=num_results))
+        
+        if not results:
+            return f"❌ Aucun résultat trouvé pour '{query}'"
+        
+        # Formater les résultats
+        output = f"🔍 Résultats de recherche pour '{query}':\n\n"
+        for i, result in enumerate(results, 1):
+            title = result.get('title', 'Sans titre')
+            url = result.get('href', '#')
+            body = result.get('body', 'Pas de description')
+            
+            output += f"{i}. **{title}**\n"
+            output += f"   🔗 {url}\n"
+            output += f"   📝 {body[:150]}...\n\n"
+        
+        return output
+    
+    except Exception as e:
+        return f"❌ Erreur lors de la recherche web: {str(e)}"
+
+def fetch_webpage(url):
+    """Récupère et extrait le contenu textuel d'une page web avec Trafilatura."""
+    try:
+        import trafilatura
+        
+        # Valider l'URL
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+        
+        # Télécharger la page
+        response = requests.get(url, timeout=15, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+        response.raise_for_status()
+        
+        # Extraire le contenu avec trafilatura
+        content = trafilatura.extract(response.text, include_comments=False, favor_precision=True)
+        
+        if not content:
+            return f"❌ Impossible d'extraire le contenu de {url}"
+        
+        # Limiter à 2000 caractères pour éviter de dépasser les limites de tokens
+        if len(content) > 2000:
+            content = content[:2000] + "\n\n[...contenu tronqué...]"
+        
+        # Récupérer le titre
+        metadata = trafilatura.extract_metadata(response.text)
+        title = metadata.title if metadata and metadata.title else "Sans titre"
+        
+        output = f"📄 Contenu de: {url}\n"
+        output += f"📋 Titre: {title}\n"
+        output += f"{'='*60}\n\n"
+        output += content
+        
+        return output
+    
+    except requests.exceptions.ConnectionError:
+        return f"❌ Erreur de connexion: impossible d'accéder à {url}"
+    except requests.exceptions.Timeout:
+        return f"❌ Timeout: la page met trop de temps à charger"
+    except requests.exceptions.HTTPError as e:
+        return f"❌ Erreur HTTP {e.response.status_code}: {url}"
+    except Exception as e:
+        return f"❌ Erreur lors de la récupération de la page: {e}"
+
+def search_and_summarize(query):
+    """Recherche sur le web et extrait le contenu de la première page."""
+    try:
+        # D'abord, faire une recherche
+        search_results = search_web(query, num_results=1)
+        
+        if "❌" in search_results or "⚠️" in search_results:
+            return search_results
+        
+        # Extraire la première URL des résultats
+        import re
+        urls = re.findall(r'https?://[^\s\)]+', search_results)
+        
+        if not urls:
+            return search_results  # Retourner juste les résultats si pas d'URL
+        
+        # Récupérer le contenu de la première page
+        first_url = urls[0]
+        content = fetch_webpage(first_url)
+        
+        return content
+    
+    except Exception as e:
+        return f"❌ Erreur lors de la recherche et résumé: {e}"
