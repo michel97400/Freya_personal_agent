@@ -698,15 +698,15 @@ def search_web(query, num_results=5):
         # Utiliser DuckDuckGo qui est plus permissif que Google
         ddgs = DDGS()
         
-        # Effectuer la recherche
-        results = list(ddgs.text(query, max_results=num_results))
+        # Effectuer la recherche en français (région France)
+        results = list(ddgs.text(query, region='fr-fr', max_results=num_results))
         
         if not results:
             return f"❌ Aucun résultat trouvé pour '{query}'"
         
         # Formater les résultats
         output = f"🔍 Résultats de recherche pour '{query}':\n\n"
-        for i, result in enumerate(results, 1):
+        for i, result in enumerate(results, 5):
             title = result.get('title', 'Sans titre')
             url = result.get('href', '#')
             body = result.get('body', 'Pas de description')
@@ -741,9 +741,9 @@ def fetch_webpage(url):
         if not content:
             return f"❌ Impossible d'extraire le contenu de {url}"
         
-        # Limiter à 2000 caractères pour éviter de dépasser les limites de tokens
-        if len(content) > 2000:
-            content = content[:2000] + "\n\n[...contenu tronqué...]"
+        # Limiter à 4000 caractères pour éviter de dépasser les limites de tokens
+        if len(content) > 4000:
+            content = content[:4000] + "\n\n[...contenu tronqué...]"
         
         # Récupérer le titre
         metadata = trafilatura.extract_metadata(response.text)
@@ -766,26 +766,50 @@ def fetch_webpage(url):
         return f"❌ Erreur lors de la récupération de la page: {e}"
 
 def search_and_summarize(query):
-    """Recherche sur le web et extrait le contenu de la première page."""
+    """Recherche sur le web et extrait le contenu en texte de la page la plus pertinente."""
     try:
-        # D'abord, faire une recherche
-        search_results = search_web(query, num_results=1)
+        # D'abord, faire une recherche avec plusieurs résultats
+        search_results = search_web(query, num_results=5)
         
         if "❌" in search_results or "⚠️" in search_results:
             return search_results
         
-        # Extraire la première URL des résultats
+        # Extraire toutes les URLs et titres des résultats
         import re
-        urls = re.findall(r'https?://[^\s\)]+', search_results)
+        urls = re.findall(r'🔗 (https?://[^\s\)]+)', search_results)
+        titles = re.findall(r'\*\*([^*]+)\*\*', search_results)
         
         if not urls:
             return search_results  # Retourner juste les résultats si pas d'URL
         
-        # Récupérer le contenu de la première page
-        first_url = urls[0]
-        content = fetch_webpage(first_url)
+        # Trouver la page la plus pertinente (correspondance avec la query)
+        query_words = query.lower().split()
+        best_url = urls[0]
+        best_score = 0
         
-        return content
+        for i, (url, title) in enumerate(zip(urls, titles)):
+            title_lower = title.lower()
+            # Score basé sur les mots de la query présents dans le titre
+            score = sum(1 for word in query_words if word in title_lower)
+            # Bonus si le titre commence par un mot de la query
+            if any(title_lower.startswith(word) for word in query_words):
+                score += 2
+            # Bonus pour Wikipedia (généralement plus fiable)
+            if "wikipedia" in url.lower():
+                score += 1
+            # Pénalité pour les pages qui semblent être des variantes (III, Jr, etc.)
+            if any(x in title for x in [" III", " II", " Jr", " Sr", "frère", "fils", "neveu"]):
+                if not any(x in query for x in ["III", "II", "Jr", "frère", "fils", "neveu"]):
+                    score -= 2
+            
+            if score > best_score:
+                best_score = score
+                best_url = url
+        
+        # Récupérer le contenu de la page la plus pertinente
+        content = fetch_webpage(best_url)
+        
+        return f"📄 Source: {best_url}\n\n{content}"
     
     except Exception as e:
         return f"❌ Erreur lors de la recherche et résumé: {e}"

@@ -1,0 +1,30 @@
+## 📖 Extraction détaillée du contenu de la page Wikipédia
+**URL** : https://fr.wikipedia.org/wiki/Napoléon_Bonaparte
+
+---
+
+### 🗂️ Informations de base (infobox)
+
+| Champ | Valeur |
+|------|--------|
+| **Nom de naissance** | **Napoleone Buonaparte** |
+| **Naissance** | **15 août 1769 – Ajaccio, Corse (alors partie du Royaume de France)** |
+| **Décès** | **5 mai 1821 – Longwood, île Sainte‑Hélène (royaume du Royaume‑Uni)** |
+| **Origine** | Français, Corse |
+| **Allégeance** | Royaume de France – République française – Empire français |
+| **Grade** | Général de division |
+| **Années de service** | **1785 – 1815** |
+| **Commandements** | Armée d’Italie, Armée d’Orient, Armée de l’Intérieur, Commandant en chef de l’armée napoléonienne |
+| **Conflits majeurs** | Guerres de la Révolution française, Guerres napoléoniennes |
+| **Faits d’armes notables** | Siège de Toulon, Bataille du pont d’Arcole, Rivoli, Pyramides, Marengo, Austerlitz, Iéna, Friedland, Leipzig, Waterloo |
+| **Fonctions politiques** | Premier consul (1799‑1804), Empereur des Français (1804‑1814, 1815) |
+| **Famille** | Maison Bonaparte (Charles‑Michel Bonaparte & Letizia Ramolino) |
+| **Autres titres** | Roi d’Italie (1805‑1814), Prince d’Elbe, etc. |
+
+---
+
+### 📚 Résumé des grandes étapes de sa vie (tiré du texte de la page)
+
+#### 1️⃣ **Jeunesse et formation**
+- **Origines corses** : Né à Ajaccio, fils de Charles Bonaparte, un avocat corse, et de Letizia Ramolino.
+- **Éducation** : Études à l’École militaire

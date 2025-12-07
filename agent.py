@@ -430,7 +430,7 @@ Format requis:
 Outils disponibles:
 - list_files: {"path": "chemin"} - Lister fichiers
 - read_file: {"filename": "fichier"} - Lire fichier
-- write_file: {"filename": "fichier", "content": "contenu"} - Écrire fichier
+- write_file: {"filename": "fichier", "content": "contenu"} - Écrire fichier (content OBLIGATOIRE!)
 - delete_path: {"path": "chemin"} - Supprimer fichier/dossier
 - create_folder: {"path": "chemin"} - Créer dossier
 - modify_file: {"filename": "fichier", "search_text": "ancien", "replacement_text": "nouveau"}
@@ -438,19 +438,37 @@ Outils disponibles:
 - git_workflow: {"message": "commit msg"} - Add, commit, push
 - git_push: {} - Push uniquement
 - open_browser: {"url": "url"} - Ouvrir navigateur
-- search_web: {"query": "recherche"} - Recherche web
-- fetch_webpage: {"url": "url"} - Récupérer contenu page
+- search_web: {"query": "recherche"} - Recherche web (retourne liens uniquement)
+- fetch_webpage: {"url": "url"} - Récupérer contenu d'une page
+- search_and_summarize: {"query": "recherche"} - Recherche + extraction contenu + résumé (pour rapports détaillés)
 - launch_application: {"app_name": "nom"} - Lancer application
-- print_file: {"filename": "fichier"} - Imprimer fichier
+- print_file: {"file_path": "chemin/fichier"} - Imprimer fichier (file_path OBLIGATOIRE!)
 
 Mappings chemins:
 - bureau/desktop → C:\\Users\\Payet\\Desktop
 - documents → C:\\Users\\Payet\\Documents
 - Par défaut (si aucun chemin spécifié) → dossier courant du projet (chemin relatif)
 
-IMPORTANT: Si l'utilisateur ne précise PAS où créer le fichier, utilise un chemin RELATIF (ex: "factorial.py" et non "C:\\...\\factorial.py").
-
-Demande utilisateur: """
+RÈGLES IMPORTANTES:
+1. Si l'utilisateur ne précise PAS où créer le fichier, utilise un chemin RELATIF (ex: "output.txt")
+2. Si l'utilisateur dit "ça", "le résumé", "le résultat", utilise le CONTEXTE ci-dessous
+3. Pour write_file, le "content" est OBLIGATOIRE - utilise le contexte si nécessaire
+4. Pour print_file, utilise "file_path" (pas "filename")
+"""
+        
+        # Ajouter le contexte de la conversation (dernier résultat assistant)
+        context = ""
+        for msg in reversed(self.memory):
+            if isinstance(msg, dict) and msg.get("role") == "assistant" and msg.get("content"):
+                content = msg["content"]
+                if len(content) > 50:  # Ignorer les réponses courtes
+                    context = content[:1500]  # Limiter à 1500 chars
+                    break
+        
+        if context:
+            planning_prompt += f"\n\nCONTEXTE (résultat précédent à utiliser si l'utilisateur y fait référence):\n{context}\n"
+        
+        planning_prompt += "\nDemande utilisateur: "
         
         try:
             planning_response = client.chat.completions.create(
@@ -524,7 +542,70 @@ Demande utilisateur: """
         # ========================================
         
         # Actions complexes nécessitant planification TRM
-        complex_actions = ["supprim", "delete", "efface", "modifi", "crée", "écris", "git"]
+        complex_actions = [
+            # Création/écriture de fichiers
+            "crée", "créer", "créé", "créée", "création",
+            "écris", "écrire", "écrit", "écriture",
+            "génère", "générer", "génère", "génération",
+            "fabrique", "fabriquer", "produis", "produire",
+            "fait", "faire", "fais",
+            "met", "mettre", "mets",
+            "sauvegarde", "sauvegarder", "enregistre", "enregistrer",
+            "stocke", "stocker", "conserve", "conserver",
+            "copie", "copier", "duplique", "dupliquer",
+            "exporte", "exporter",
+            
+            # Modification de fichiers
+            "modifi", "modifier", "modifie",
+            "change", "changer", "changes",
+            "remplace", "remplacer", "remplacement",
+            "rajoute", "rajouter", "ajoute", "ajouter", "ajout",
+            "insère", "insérer", "insertion",
+            "édite", "éditer", "édition",
+            "corrige", "corriger", "correction",
+            "update", "upgrade", "maj", "mise à jour",
+            "renomme", "renommer", "rename",
+            "déplace", "déplacer", "move", "bouge", "bouger",
+            
+            # Suppression
+            "supprim", "supprimer", "supprime", "suppression",
+            "delete", "del", "remove",
+            "efface", "effacer", "effacement",
+            "retire", "retirer", "enlève", "enlever",
+            "vide", "vider", "nettoie", "nettoyer", "nettoyage",
+            "détruit", "détruire", "destruction",
+            
+            # Création de dossiers
+            "dossier", "répertoire", "directory", "folder",
+            "mkdir", "nouveau dossier",
+            
+            # Git operations
+            "git", "push", "commit", "clone", "pull", "fetch",
+            "merge", "branch", "checkout", "stash", "rebase",
+            "add", "staging", "staged",
+            
+            # Impression
+            "imprim", "imprimer", "imprime", "impression",
+            "print", "printer", "imprimante",
+            
+            # Installation
+            "install", "installe", "installer", "installation",
+            "pip", "package", "module", "librairie", "bibliothèque",
+            "désinstall", "uninstall",
+            
+            # Lancement/exécution
+            "lance", "lancer", "exécute", "exécuter", "run",
+            "démarre", "démarrer", "start", "ouvre", "ouvrir",
+            
+            # Téléchargement
+            "télécharge", "télécharger", "download",
+            "récupère", "récupérer", "fetch",
+            
+            # Multi-étapes (plusieurs actions)
+            " et ", " puis ", " ensuite ", " après ", " avant ",
+            " aussi ", " également ", " en plus ",
+            " d'abord ", " finalement ", " enfin "
+        ]
         needs_planning = any(kw in message_lower for kw in complex_actions)
         
         if needs_planning and requires_tool:
