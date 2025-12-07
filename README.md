@@ -2,10 +2,10 @@
 
 FREYA est un assistant IA personnel qui gère vos fichiers, modifie votre code et exécute des tâches système via des commandes en langage naturel.
 
-**Outils disponibles:** 20 outils intégrés (fichiers, Git, web, système, impression, recherche)
-**API:** Groq (gpt-oss-120b)
-**Validateur local:** TRM (DeepSeek R1 1.5B) - Valide les actions avant exécution
-**Optimisé pour:** Clé API gratuite (8000 TPM)
+- **Outils disponibles:** 20 outils intégrés (fichiers, Git, web, système, impression, recherche)
+- **API:** Groq (gpt-oss-120b)
+- **Validateur local:** TRM (DeepSeek R1 1.5B) - Valide les actions avant exécution
+- **Optimisé pour:** Clé API gratuite (8000 TPM)  
 
 ## 📋 Table des matières
 
@@ -92,7 +92,7 @@ GROQ_API_URL=https://api.groq.com/openai/v1
 - Gratuit jusqu'à ces limites
 
 **⚠️ Important:** 
-- Ne commettez **JAMAIS** votre `.env` sur Git (il est déjà dans `.gitignore`)
+- Ne committez **JAMAIS** votre `.env` sur Git (il est déjà dans `.gitignore`)
 - Gardez votre clé API privée et sécurisée
 - Si vous la compromettez, régénérez-la immédiatement sur console.groq.com
 
