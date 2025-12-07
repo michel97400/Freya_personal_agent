@@ -128,6 +128,18 @@ class TRMValidator:
             if os.path.isdir(path):
                 result["warnings"].append(f"⚠️ Suppression d'un dossier: {path}")
         
+        # Vérifier write_file sur fichiers de code existants (DANGEREUX - écrase!)
+        if tool_name == "write_file":
+            filename = arguments.get("filename", "")
+            code_extensions = [".py", ".js", ".ts", ".java", ".cpp", ".c", ".h", ".cs", ".go", ".rs", ".rb", ".php"]
+            is_code_file = any(filename.endswith(ext) for ext in code_extensions)
+            file_exists = os.path.exists(filename)
+            
+            if is_code_file and file_exists:
+                result["approved"] = False
+                result["reason"] = f"🚫 BLOQUÉ: write_file sur fichier de code existant '{filename}'. Utilise modify_file avec action='append' pour ajouter du code!"
+                return result
+        
         # Vérifier git_push (pas de push sur main sans confirmation)
         if tool_name == "git_push":
             branch = arguments.get("branch", "main")
@@ -140,7 +152,7 @@ class TRMValidator:
             "read_file": ["filename"],
             "delete_path": ["path"],
             "create_folder": ["path"],
-            "modify_file": ["filename", "search_text", "replacement_text"],
+            "modify_file": ["filename", "replacement_text"],  # search_text peut être vide pour append
         }
         
         if tool_name in required_args:

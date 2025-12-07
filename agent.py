@@ -430,10 +430,10 @@ Format requis:
 Outils disponibles:
 - list_files: {"path": "chemin"} - Lister fichiers
 - read_file: {"filename": "fichier"} - Lire fichier
-- write_file: {"filename": "fichier", "content": "contenu"} - Écrire fichier (content OBLIGATOIRE!)
+- write_file: {"filename": "fichier", "content": "contenu"} - CRÉER un NOUVEAU fichier (ÉCRASE si existe!)
 - delete_path: {"path": "chemin"} - Supprimer fichier/dossier
 - create_folder: {"path": "chemin"} - Créer dossier
-- modify_file: {"filename": "fichier", "search_text": "ancien", "replacement_text": "nouveau"}
+- modify_file: {"filename": "fichier", "search_text": "texte_existant", "replacement_text": "nouveau_texte", "action": "replace|insert_after|insert_before|append"} - MODIFIER fichier existant
 - search_files: {"pattern": "motif", "path": "chemin"}
 - git_workflow: {"message": "commit msg"} - Add, commit, push
 - git_push: {} - Push uniquement
@@ -443,6 +443,12 @@ Outils disponibles:
 - search_and_summarize: {"query": "recherche"} - Recherche + extraction contenu + résumé (pour rapports détaillés)
 - launch_application: {"app_name": "nom"} - Lancer application
 - print_file: {"file_path": "chemin/fichier"} - Imprimer fichier (file_path OBLIGATOIRE!)
+
+⚠️ RÈGLES CRITIQUES pour les fichiers de CODE:
+- Pour AJOUTER une fonction/classe dans un fichier EXISTANT → utilise modify_file avec action="append"
+- Pour MODIFIER du code existant → utilise modify_file avec action="replace"
+- write_file ÉCRASE TOUT le fichier ! Ne l'utilise QUE pour créer un NOUVEAU fichier
+- Pour ajouter du code à la fin: modify_file avec search_text="" et action="append"
 
 Mappings chemins:
 - bureau/desktop → C:\\Users\\Payet\\Desktop

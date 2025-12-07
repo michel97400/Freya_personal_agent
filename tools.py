@@ -813,3 +813,29 @@ def search_and_summarize(query):
     
     except Exception as e:
         return f"❌ Erreur lors de la recherche et résumé: {e}"
+
+
+def monitor_network_traffic(interface: str = 'eth0', duration: int = 10) -> str:
+    """Surveille le trafic réseau sur l'interface spécifiée pendant une durée donnée.
+
+    Args:
+        interface (str): Nom de l'interface réseau à surveiller (ex: 'eth0', 'en0').
+        duration (int): Durée de la capture en secondes.
+
+    Returns:
+        str: Résumé du trafic capturé (bytes reçus, bytes envoyés).
+    """
+    try:
+        import psutil
+        counters_start = psutil.net_io_counters(pernic=True).get(interface)
+        if not counters_start:
+            return f"Interface '{interface}' introuvable."
+        import time
+        time.sleep(duration)
+        counters_end = psutil.net_io_counters(pernic=True).get(interface)
+        bytes_sent = counters_end.bytes_sent - counters_start.bytes_sent
+        bytes_recv = counters_end.bytes_recv - counters_start.bytes_recv
+        return (f"Trafic sur {interface} pendant {duration}s: "
+                f"{bytes_sent} bytes envoyés, {bytes_recv} bytes reçus.")
+    except Exception as e:
+        return f"Erreur lors de la surveillance du trafic réseau: {e}"
