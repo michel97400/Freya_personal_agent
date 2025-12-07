@@ -389,13 +389,26 @@ def call_tool(tool_name, arguments):
 class FreyaAgentNL:
     def __init__(self):
         self.memory = []
-        self.max_memory_length = 5  # Réduire à 5 messages pour économiser les tokens
+        self.max_memory_length = 3  # Garder seulement les 3 derniers échanges (6 messages max)
 
     def _cleanup_memory(self):
-        """Nettoie la mémoire si elle dépasse la limite."""
-        if len(self.memory) > self.max_memory_length:
-            # Garder seulement les derniers messages
-            self.memory = self.memory[-self.max_memory_length:]
+        """Nettoie la mémoire de manière agressive pour éviter les dépassements de tokens."""
+        # Garder seulement les N derniers échanges (user + assistant)
+        if len(self.memory) > self.max_memory_length * 2:
+            self.memory = self.memory[-(self.max_memory_length * 2):]
+        
+        # Si le dernier message est très long (ex: contenu de fichier), le résumer
+        for i, msg in enumerate(self.memory):
+            # Gérer à la fois les dicts et les objets
+            role = msg.get("role") if isinstance(msg, dict) else getattr(msg, "role", None)
+            content = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
+            
+            if role == "assistant" and content and len(content) > 2000:
+                if isinstance(msg, dict):
+                    msg["content"] = content[:2000] + "\n... [contenu tronqué]"
+                else:
+                    # Remplacer l'objet par un dict
+                    self.memory[i] = {"role": "assistant", "content": content[:2000] + "\n... [contenu tronqué]"}
 
     def _create_plan(self, message):
         """Crée un plan d'exécution détaillé avant d'agir."""
@@ -434,7 +447,7 @@ Sois TRÈS PRÉCIS et EXHAUSTIF. Énumère CHAQUE action."""
         # Keywords qui demandent explicitement les outils
         keywords_require_tools = [
             # Modifications
-            "modifi", "rajoute", "ajoute", "change", "remplace", "crée", "écris", "insère", "supprima", "dele",
+            "modifi", "rajoute", "ajoute", "change", "remplace", "crée", "écris", "insère", "supprim", "supprime", "supprimer", "dele", "delete", "efface",
             # Installation/packages
             "instal", "pip",
             # Git
@@ -452,65 +465,44 @@ Sois TRÈS PRÉCIS et EXHAUSTIF. Énumère CHAQUE action."""
         ]
         requires_tool = any(keyword in message_lower for keyword in keywords_require_tools)
         
-        # Contexte supplémentaire: si mention de chemin ou dossier spécifique → force TOUJOURS les outils
-        context_keywords = ["desktop", "bureau", "documents", "downloads", "téléchargements", "c:\\", "d:\\", "dossier", "répertoire"]
-        if any(ctx in message_lower for ctx in context_keywords):
+        # Contexte supplémentaire: si mention de chemin SPÉCIFIQUE → force les outils
+        # Ne pas inclure "dossier" ou "fichier" ici car ce sont des termes génériques
+        context_keywords = ["desktop", "bureau", "documents", "downloads", "téléchargements", "c:\\", "d:\\", "en cours", "actuel", "courant", "ici"]
+        has_specific_context = any(ctx in message_lower for ctx in context_keywords)
+        
+        if has_specific_context:
             requires_tool = True
         
         # Créer un plan si c'est une demande complexe (DÉSACTIVÉ pour économiser tokens)
         # plan = self._create_plan(message) if requires_tool else None
         plan = None
         
-        # Pour Git et recherche web, utiliser "auto" pour éviter les conflits tool_choice
-        # Le fallback prendra le relais si nécessaire
-        if any(kw in message_lower for kw in ["push", "commit", "git", "dépôt", "repo", "recherche", "cherche", "google", "web", "internet"]):
+        # Détection de demandes vagues (sans contexte spécifique)
+        vague_requests = ["liste", "lister", "affiche", "montre", "contenu"]
+        is_vague = any(kw in message_lower for kw in vague_requests) and not has_specific_context
+        
+        # Utiliser "auto" pour : Git, recherche web, et demandes vagues (pour permettre au modèle de demander des précisions)
+        if any(kw in message_lower for kw in ["push", "commit", "git", "dépôt", "repo", "recherche", "cherche", "google", "web", "internet"]) or is_vague:
             tool_choice = "auto"
         else:
             tool_choice = "required" if requires_tool else "auto"
         
-        # Système de prompt simple et optimisé
-        system_prompt = """Tu es FREYA, un assistant personnel pour gérer des fichiers, du code et Git.
+        # Système de prompt compact pour économiser les tokens
+        system_prompt = """FREYA - Assistant fichiers/code/Git. Accès complet système.
 
-📍 Accès: Tu as accès à **l'ensemble du système de fichiers** (tous les disques, tous les répertoires).
-Tu peux naviguer partout: C:/, D:/, Desktop, Documents, n'importe où sur le PC.
+Mappings: bureau→C:\\Users\\Payet\\Desktop, documents→C:\\Users\\Payet\\Documents
 
-Mapping des chemins:
-- "bureau" ou "desktop" → C:\\Users\\Apprenant\\Desktop
-- "documents" → C:\\Users\\Apprenant\\Documents
-- "téléchargements" ou "downloads" → C:\\Users\\Apprenant\\Downloads
+Outils: list_files, read_file, write_file, modify_file, delete_path, create_folder, search_files, 
+open_browser, search_web, fetch_webpage, search_and_summarize, git_*, install_python_package, 
+launch_application, print_file, get_pc_config
 
-Outils disponibles:
-📁 Fichiers: list_files, read_file, write_file, modify_file, delete_path, create_folder, search_files
-   → Utilisables sur TOUT chemin du système (C:\\Users\\, D:\\, etc.)
-🌐 Web: open_browser (URLs et recherches YouTube), search_web (recherche Google), fetch_webpage (récupère contenu), search_and_summarize (cherche et résume)
-🔧 Git: git_clone, git_push, git_workflow, git_create_branch, git_checkout_branch, git_list_branches
-🐍 Python: install_python_package (pip install)
-🚀 Système: launch_application (lancer exe, scripts, apps)
-🖨️ Impression: print_file (imprime des fichiers sur imprimantes réseau/locales)
-📊 Configuration: get_pc_config (CPU, RAM, disque)
-
-Instructions:
-- 🎯 TOUJOURS exécuter les outils demandés et retourner les résultats COMPLETS
-- Ne JAMAIS dire "Tâche complétée" ou "Fait" ou "Ok" sans résultats - fournis TOUS les détails
-- Pour les fichiers simples comme "requirements.txt", "main.py", etc.: utilise le chemin relatif ou absolu correct
-  - "imprime requirements.txt" → print_file("C:\\Users\\Apprenant\\Desktop\\Freya_personal_agent\\requirements.txt") ou print_file("requirements.txt")
-  - "imprime main.py" → print_file("main.py")
-- Quand l'utilisateur demande "aller sur X", "voir X", "lister X", "contenu de X", "éléments de X" → utilise list_files avec le bon chemin
-  - "liste moi les éléments du bureau" → list_files("C:\\\\Users\\\\Apprenant\\\\Desktop")
-  - "qu'est-ce qu'il y a dans documents" → list_files("C:\\\\Users\\\\Apprenant\\\\Documents")
-  - "liste les fichiers de downloads" → list_files("C:\\\\Users\\\\Apprenant\\\\Downloads")
-- Affiche TOUS les fichiers, dossiers, informations trouvés de manière claire et lisible
-- Pour les listes: montre chaque élément clairement (type, si c'est un dossier ou fichier)
-- Formate les résultats de manière professionnelle avec emojis et indentation
-- Sois concis mais COMPLET - ne laisse aucun résultat de côté
-- Exécute exactement ce que l'utilisateur demande
-- Utilise les chemins absolus quand fournis (C:\\Users\\..., D:\\projects\\, etc.)
-- Pour les modifications: utilise modify_file avec l'action appropriée (replace, insert_before, insert_after, append)
-- Pour Git: préfère git_workflow pour un workflow complet (add → commit → merge → push)
-- git_clone: clone un dépôt Git à partir d'une URL (ex: https://github.com/user/repo.git)
-- launch_application: lance une application (notepad.exe, C:\\Program Files\\app.exe, etc.)
-- print_file: imprime un fichier (utilise chemin relatif ou absolu)
-- IMPORTANT: Tu peux accéder à des fichiers en DEHORS du projet (Desktop, Documents, etc.)"""
+Règles:
+- "supprime/efface/delete" → utilise delete_path (PAS list_files!)
+- "liste/affiche/montre" → utilise list_files
+- Exécute les outils et retourne TOUS les résultats
+- Formate clairement (emojis, indentation)
+- Chemins absolus ou relatifs acceptés
+- Git: préfère git_workflow pour workflow complet"""
         
         # Ajouter le plan au prompt si disponible
         if plan:
@@ -530,8 +522,17 @@ Instructions:
 
         # Gestion des tool_calls (une seule itération pour économiser les tokens)
         if hasattr(resp_msg, "tool_calls") and resp_msg.tool_calls:
-            # Ajouter la réponse du modèle avec les tool_calls
-            self.memory.append(resp_msg)
+            # Convertir resp_msg en dictionnaire avant de l'ajouter
+            msg_dict = {
+                "role": "assistant",
+                "content": resp_msg.content or "",
+                "tool_calls": [{
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments}
+                } for tc in resp_msg.tool_calls]
+            }
+            self.memory.append(msg_dict)
             
             # Exécuter TOUS les outils et collecter les résultats
             all_results = []
