@@ -4,6 +4,7 @@ FREYA est un assistant IA personnel qui gère vos fichiers, modifie votre code e
 
 **Outils disponibles:** 20 outils intégrés (fichiers, Git, web, système, impression, recherche)
 **API:** Groq (gpt-oss-120b)
+**Validateur local:** TRM (DeepSeek R1 1.5B) - Valide les actions avant exécution
 **Optimisé pour:** Clé API gratuite (8000 TPM)
 
 ## 📋 Table des matières
@@ -18,6 +19,7 @@ FREYA est un assistant IA personnel qui gère vos fichiers, modifie votre code e
   - [Système](#système)
   - [Impression](#impression)
 - [Architecture](#architecture)
+- [TRM Validator](#trm-validator)
 - [Optimisation des tokens](#optimisation-des-tokens)
 
 ---
@@ -415,6 +417,7 @@ Imprime un fichier sur une imprimante réseau ou locale
 Freya_personal_agent/
 ├── agent.py           # Cœur de l'agent (classe FreyaAgentNL)
 ├── tools.py           # Implémentation de toutes les fonctions outils
+├── trm_validator.py   # Validateur TRM local (DeepSeek R1 1.5B)
 ├── freya_llm.py       # Client Groq API
 ├── main.py            # Interface REPL interactive
 ├── .env               # Variables d'environnement (À CRÉER)
@@ -440,10 +443,79 @@ Freya_personal_agent/
 - Client Groq configuré
 - Fonction `ask_groq()` pour les appels API
 
+**`trm_validator.py`**
+- Validateur local avec DeepSeek R1 1.5B
+- `validate_plan()` - Valide un plan d'exécution complet
+- `validate_tool_call()` - Valide un appel d'outil individuel
+- Protection des chemins système (Windows, Program Files, etc.)
+
 **`main.py`**
 - Boucle REPL interactive
 - Gestion des commandes `exit`/`quit`
 - Gestion des interruptions (Ctrl+C)
+
+---
+
+## 🛡️ TRM Validator
+
+### Qu'est-ce que le TRM ?
+
+Le **TRM (Tiny Recursive Model)** est un validateur local qui utilise **DeepSeek R1 1.5B** pour vérifier et sécuriser les actions avant leur exécution. Il fonctionne comme une couche de sécurité entre Groq et l'exécution des outils.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    WORKFLOW FREYA                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  [1] Requête utilisateur                                    │
+│       ↓                                                     │
+│  [2] Groq GPT-OSS 120B → génère un PLAN JSON               │
+│       ↓                                                     │
+│  [3] TRM DeepSeek R1 1.5B → valide/corrige le PLAN         │
+│       │                                                     │
+│       ├── ✅ Plan approuvé → Exécution                     │
+│       ├── ⚠️ Plan corrigé → Exécution du plan corrigé      │
+│       └── ❌ Plan rejeté → Message d'erreur                │
+│       ↓                                                     │
+│  [4] Exécution étape par étape (tools.py)                  │
+│       ↓                                                     │
+│  [5] Résultat formaté                                       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Protections actives
+
+| Type | Détails |
+|------|---------|
+| 🚫 **Chemins système** | `C:\Windows`, `C:\Program Files`, `C:\System32` |
+| 🚫 **Racines** | `C:\`, `D:\`, `/`, `\` |
+| ⚠️ **Warnings** | Push sur main, suppressions de dossiers |
+| ✅ **Arguments** | Vérification des arguments requis |
+
+### Configuration du modèle TRM
+
+Le TRM utilise un modèle GGUF local. Pour l'activer :
+
+1. **Télécharger le modèle** (~1.6GB)
+   - Aller sur [HuggingFace - DeepSeek R1 Distill Qwen 1.5B GGUF](https://huggingface.co/lmstudio-community/DeepSeek-R1-Distill-Qwen-1.5B-GGUF)
+   - Télécharger `DeepSeek-R1-Distill-Qwen-1.5B-Q8_0.gguf` (version Q8 recommandée)
+   - Placer le fichier `.gguf` à la racine du projet
+
+2. **Le validateur se charge automatiquement au démarrage**
+```
+🧠 Chargement du TRM (DeepSeek R1 1.5B)...
+✅ TRM chargé avec succès
+```
+
+### Mode dégradé
+
+Si le modèle GGUF n'est pas présent, le TRM fonctionne en **mode règles uniquement** (plus rapide, mais moins intelligent) :
+- Validation des chemins dangereux ✅
+- Vérification des arguments requis ✅
+- Pas d'analyse sémantique des requêtes ❌
 
 ---
 
@@ -542,9 +614,11 @@ FREYA est optimisé pour la clé API Groq gratuite (8000 TPM) avec les stratégi
 
 ## 🔮 Prochaines améliorations prévues
 
+- [x] TRM Validator local (DeepSeek R1 1.5B)
+- [x] Planification avec validation avant exécution
+- [ ] Support GPU pour TRM (CUDA)
 - [ ] Support de Ollama pour les modèles locaux
 - [ ] Déploiement sur RTX 5080/5090
-- [ ] Système de planning réactivé (si tokens le permettent)
 - [ ] Opérations Git avancées (cherry-pick, rebase, stash)
 - [ ] Support des webhooks et automations
 - [ ] Interface Web (au lieu de REPL)

@@ -2,7 +2,9 @@
 import json
 from tools import list_files, read_file, write_file, delete_path, search_files, create_folder, open_browser, modify_file, git_push, git_workflow, git_create_branch, git_checkout_branch, git_list_branches, get_pc_config, install_python_package, git_clone, launch_application, print_file, search_web, fetch_webpage, search_and_summarize
 from freya_llm import client  # ton client Groq déjà configuré
+from trm_validator import get_validator, validate_tool_call
 import os
+import re
 
 # Définition des outils pour Groq
 TOOL_DEFS = [
@@ -411,28 +413,73 @@ class FreyaAgentNL:
                     self.memory[i] = {"role": "assistant", "content": content[:2000] + "\n... [contenu tronqué]"}
 
     def _create_plan(self, message):
-        """Crée un plan d'exécution détaillé avant d'agir."""
-        planning_prompt = f"""Analyse cette demande et crée un plan d'exécution DÉTAILLÉ:
-"{message}"
+        """Crée un plan d'exécution détaillé en JSON avant d'agir."""
+        planning_prompt = """Tu es un planificateur d'actions. Analyse la demande et génère un plan JSON.
 
-Réponds avec un plan structuré incluant:
-1. Les dossiers à créer (avec chemins complets)
-2. Les fichiers à créer (avec chemin et contenu)
-3. Les fichiers à modifier
-4. L'ordre exact d'exécution
+IMPORTANT: Réponds UNIQUEMENT avec du JSON valide, sans texte avant ou après.
 
-Sois TRÈS PRÉCIS et EXHAUSTIF. Énumère CHAQUE action."""
+Format requis:
+{
+  "summary": "Description courte du plan",
+  "steps": [
+    {"action": "nom_outil", "args": {"arg1": "valeur1"}},
+    {"action": "nom_outil2", "args": {"arg2": "valeur2"}}
+  ]
+}
+
+Outils disponibles:
+- list_files: {"path": "chemin"} - Lister fichiers
+- read_file: {"filename": "fichier"} - Lire fichier
+- write_file: {"filename": "fichier", "content": "contenu"} - Écrire fichier
+- delete_path: {"path": "chemin"} - Supprimer fichier/dossier
+- create_folder: {"path": "chemin"} - Créer dossier
+- modify_file: {"filename": "fichier", "search_text": "ancien", "replacement_text": "nouveau"}
+- search_files: {"pattern": "motif", "path": "chemin"}
+- git_workflow: {"message": "commit msg"} - Add, commit, push
+- git_push: {} - Push uniquement
+- open_browser: {"url": "url"} - Ouvrir navigateur
+- search_web: {"query": "recherche"} - Recherche web
+- fetch_webpage: {"url": "url"} - Récupérer contenu page
+- launch_application: {"app_name": "nom"} - Lancer application
+- print_file: {"filename": "fichier"} - Imprimer fichier
+
+Mappings chemins:
+- bureau/desktop → C:\\Users\\Payet\\Desktop
+- documents → C:\\Users\\Payet\\Documents
+- Par défaut (si aucun chemin spécifié) → dossier courant du projet (chemin relatif)
+
+IMPORTANT: Si l'utilisateur ne précise PAS où créer le fichier, utilise un chemin RELATIF (ex: "factorial.py" et non "C:\\...\\factorial.py").
+
+Demande utilisateur: """
         
         try:
             planning_response = client.chat.completions.create(
                 model="openai/gpt-oss-120b",
-                messages=[{"role": "system", "content": planning_prompt}],
-                max_tokens=2000
+                messages=[
+                    {"role": "system", "content": planning_prompt},
+                    {"role": "user", "content": message}
+                ],
+                max_tokens=800,
+                temperature=0.1
             )
-            plan = planning_response.choices[0].message.content
+            plan_text = planning_response.choices[0].message.content
+            
+            # Nettoyer et parser le JSON
+            plan_text = plan_text.strip()
+            # Enlever les backticks markdown si présents
+            if plan_text.startswith("```"):
+                plan_text = re.sub(r'^```(?:json)?\n?', '', plan_text)
+                plan_text = re.sub(r'\n?```$', '', plan_text)
+            
+            plan = json.loads(plan_text)
             return plan
+            
+        except json.JSONDecodeError as e:
+            print(f"⚠️ Plan JSON invalide: {e}")
+            return None
         except Exception as e:
-            return f"Plan: Exécuter la demande directement"
+            print(f"⚠️ Erreur création plan: {e}")
+            return None
 
     def respond(self, message):
         # Ajouter le message utilisateur à la mémoire
@@ -466,28 +513,38 @@ Sois TRÈS PRÉCIS et EXHAUSTIF. Énumère CHAQUE action."""
         requires_tool = any(keyword in message_lower for keyword in keywords_require_tools)
         
         # Contexte supplémentaire: si mention de chemin SPÉCIFIQUE → force les outils
-        # Ne pas inclure "dossier" ou "fichier" ici car ce sont des termes génériques
         context_keywords = ["desktop", "bureau", "documents", "downloads", "téléchargements", "c:\\", "d:\\", "en cours", "actuel", "courant", "ici"]
         has_specific_context = any(ctx in message_lower for ctx in context_keywords)
         
         if has_specific_context:
             requires_tool = True
         
-        # Créer un plan si c'est une demande complexe (DÉSACTIVÉ pour économiser tokens)
-        # plan = self._create_plan(message) if requires_tool else None
-        plan = None
+        # ========================================
+        # NOUVEAU WORKFLOW AVEC TRM VALIDATION
+        # ========================================
+        
+        # Actions complexes nécessitant planification TRM
+        complex_actions = ["supprim", "delete", "efface", "modifi", "crée", "écris", "git"]
+        needs_planning = any(kw in message_lower for kw in complex_actions)
+        
+        if needs_planning and requires_tool:
+            return self._execute_with_plan(message, message_lower)
+        
+        # ========================================
+        # WORKFLOW STANDARD (sans planification)
+        # ========================================
         
         # Détection de demandes vagues (sans contexte spécifique)
         vague_requests = ["liste", "lister", "affiche", "montre", "contenu"]
         is_vague = any(kw in message_lower for kw in vague_requests) and not has_specific_context
         
-        # Utiliser "auto" pour : Git, recherche web, et demandes vagues (pour permettre au modèle de demander des précisions)
+        # Utiliser "auto" pour : Git, recherche web, et demandes vagues
         if any(kw in message_lower for kw in ["push", "commit", "git", "dépôt", "repo", "recherche", "cherche", "google", "web", "internet"]) or is_vague:
             tool_choice = "auto"
         else:
             tool_choice = "required" if requires_tool else "auto"
         
-        # Système de prompt compact pour économiser les tokens
+        # Système de prompt compact
         system_prompt = """FREYA - Assistant fichiers/code/Git. Accès complet système.
 
 Mappings: bureau→C:\\Users\\Payet\\Desktop, documents→C:\\Users\\Payet\\Documents
@@ -504,10 +561,6 @@ Règles:
 - Chemins absolus ou relatifs acceptés
 - Git: préfère git_workflow pour workflow complet"""
         
-        # Ajouter le plan au prompt si disponible
-        if plan:
-            system_prompt += f"\n\nPlan:\n{plan}"
-        
         # Appel au modèle
         messages_to_send = [{"role": "system", "content": system_prompt}] + self.memory
         
@@ -515,10 +568,103 @@ Règles:
             model="openai/gpt-oss-120b",
             messages=messages_to_send,
             tools=TOOL_DEFS,
-            tool_choice=tool_choice  # Force l'utilisation des outils si nécessaire
+            tool_choice=tool_choice
         )
 
         resp_msg = response.choices[0].message
+        
+        return self._process_response(resp_msg, message, message_lower, messages_to_send, requires_tool)
+    
+    def _execute_with_plan(self, message, message_lower):
+        """Exécute une requête avec planification et validation TRM."""
+        print("📋 Création du plan d'exécution...")
+        
+        # 1. Groq génère un plan JSON
+        plan = self._create_plan(message)
+        
+        if not plan:
+            # Fallback: exécution directe sans plan
+            print("⚠️ Plan non généré, exécution directe")
+            return self._execute_direct(message, message_lower)
+        
+        print(f"📋 Plan généré: {plan.get('summary', 'N/A')}")
+        print(f"   {len(plan.get('steps', []))} étapes")
+        
+        # 2. TRM valide le plan
+        validator = get_validator()
+        validation = validator.validate_plan(plan, message)
+        
+        print(f"🔍 Validation TRM: {validation['feedback'][:100]}...")
+        
+        # 3. Si plan rejeté ou partiellement rejeté
+        if not validation["approved"]:
+            # Utiliser le plan corrigé s'il existe
+            if validation["corrected_plan"] and validation["corrected_plan"]["steps"]:
+                plan = validation["corrected_plan"]
+                print(f"🔄 Plan corrigé: {len(plan['steps'])} étapes valides")
+            else:
+                # Plan entièrement rejeté
+                error_msg = f"❌ Plan rejeté par le validateur TRM:\n{validation['feedback']}"
+                self.memory.append({"role": "assistant", "content": error_msg})
+                return error_msg
+        
+        # 4. Afficher les warnings
+        if validation["warnings"]:
+            for warning in validation["warnings"]:
+                print(f"   {warning}")
+        
+        # 5. Exécuter le plan validé
+        print("🚀 Exécution du plan validé...")
+        return self._execute_plan(plan, message_lower)
+    
+    def _execute_plan(self, plan, message_lower):
+        """Exécute un plan validé étape par étape."""
+        all_results = []
+        
+        for i, step in enumerate(plan.get("steps", [])):
+            action = step.get("action", "")
+            args = step.get("args", {})
+            
+            print(f"   [{i+1}] {action}...")
+            
+            # Dernière validation avant exécution (règles uniquement, rapide)
+            validation = validate_tool_call(action, args, "")
+            if not validation["approved"]:
+                all_results.append(f"❌ Étape {i+1} bloquée: {validation['reason']}")
+                continue
+            
+            # Exécuter l'outil
+            try:
+                result = call_tool(action, args)
+                all_results.append(f"✅ {action}: {result[:500] if len(result) > 500 else result}")
+            except Exception as e:
+                all_results.append(f"❌ {action}: Erreur - {e}")
+        
+        # Compiler les résultats
+        combined_result = f"📋 **Plan exécuté: {plan.get('summary', 'N/A')}**\n\n"
+        combined_result += "\n".join(all_results)
+        
+        self.memory.append({"role": "assistant", "content": combined_result})
+        return combined_result
+    
+    def _execute_direct(self, message, message_lower):
+        """Exécution directe sans planification (fallback)."""
+        system_prompt = """FREYA - Assistant fichiers/code/Git. Accès complet système.
+Mappings: bureau→C:\\Users\\Payet\\Desktop, documents→C:\\Users\\Payet\\Documents
+Exécute directement la demande avec les outils appropriés."""
+        
+        messages_to_send = [{"role": "system", "content": system_prompt}] + self.memory
+        
+        response = client.chat.completions.create(
+            model="openai/gpt-oss-120b",
+            messages=messages_to_send,
+            tools=TOOL_DEFS,
+            tool_choice="required"
+        )
+        
+        return self._process_response(response.choices[0].message, message, message_lower, messages_to_send, True)
+    
+    def _process_response(self, resp_msg, message, message_lower, messages_to_send, requires_tool):
 
         # Gestion des tool_calls (une seule itération pour économiser les tokens)
         if hasattr(resp_msg, "tool_calls") and resp_msg.tool_calls:
